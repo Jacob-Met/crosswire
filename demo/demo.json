@@ -1,0 +1,13 @@
+{
+  "url": "http://localhost:4417/",
+  "voice": "sage",
+  "steps": [
+    {"say": "Crosswire is for two people who share a job but not a language. A translator that sounds fluent can quietly pick one meaning of an ambiguous sentence, and nobody finds out until someone acts on the wrong one. Maya writes English. Diego reads Spanish.", "do": [{"wait": 800}]},
+    {"say": "Maya types a normal work sentence: we need to table this proposal before the board meets. In English, table can mean postpone it, or put it up for discussion. When she presses check and send, Nemotron on Nebius Token Factory proposes the readings, translates each one, and a separate call translates each translation back.", "do": [{"click": "#pane-a .chip"}, {"wait": 1500}, {"click": "#pane-a .composer button"}, {"wait": 9000}]},
+    {"say": "The app holds the message. The two readings sit side by side: what Maya means, what Diego would read in Spanish, and what that Spanish comes back as in English. Postpone and put on the agenda come back as different sentences, so the app's own word comparison confirms the ambiguity is real. At the bottom, a plain translation would have sent something that silently chose one reading.", "do": [{"wait": 1500}]},
+    {"say": "Maya picks the reading she meant: postpone. Only that translation goes to Diego.", "do": [{"click": "#sheet .col:nth-child(1) button"}, {"wait": 1500}]},
+    {"say": "Diego sees the Spanish message, and a note that Maya chose one meaning out of two. He is asked how he read it. Say he took it the other way, as bring it to the agenda.", "do": [{"click": "#pane-b input[value=B]"}, {"wait": 1200}, {"click": "#pane-b .read button"}, {"wait": 800}]},
+    {"say": "Maya now sees that Diego read it differently, before the board meets. She can tell him what she meant, and the two of them end up with the same understanding.", "do": [{"click": "#pane-a .act"}, {"wait": 1500}]},
+    {"say": "That is the loop. Nemotron proposes the readings and the translations. The app does the checking: separate back-translations, a word-overlap divergence score, and a rule that a flagged message cannot be sent until the speaker picks. Crosswire runs on Node with no dependencies, and the key stays on the server.", "do": [{"wait": 500}]}
+  ]
+}

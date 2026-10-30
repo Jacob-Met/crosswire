@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CROSSWIRE</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1 class="mark"><span class="w a"></span><span class="w b"></span>CROSSWIRE</h1>
+  <nav class="seatswitch" aria-label="Show person">
+    <button id="tab-a" class="tab a" aria-pressed="true"></button>
+    <button id="tab-b" class="tab b" aria-pressed="false"></button>
+  </nav>
+  <div id="model" class="model" role="status"></div>
+</header>
+<div id="banner" class="banner" hidden></div>
+<main class="table">
+  <section id="pane-a" class="pane a" aria-label="Person A"></section>
+  <section id="pane-b" class="pane b" aria-label="Person B"></section>
+</main>
+<div id="sheet" class="sheet" hidden role="dialog" aria-modal="false" aria-labelledby="sheet-title"></div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
