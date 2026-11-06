@@ -99,7 +99,8 @@ test("server: cannot send a flagged message without picking; pick delivers that 
     assert.equal(u.status, "mismatch");
     const st = await (await fetch(base + "/api/state?room=t")).json();
     assert.equal(st.messages.length, 1);
-    assert.equal((await post("/api/clarify", { id: sent.id })).body.message.status, "resolved");
+    assert.equal((await post("/api/clarify", { id: sent.id, seat: "a" })).body.message.status, "clarification_pending");
+    assert.equal((await post("/api/understood", { id: sent.id, seat: "b", reading: "B" })).body.message.status, "aligned");
   });
 });
 

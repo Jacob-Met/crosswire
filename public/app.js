@@ -4,6 +4,16 @@ const params = new URLSearchParams(location.search);
 const ROOM = params.get("room") || "main";
 let state = null, lastRev = -1, busy = false, sheetFor = null;
 const draft = { a: "", b: "" };
+const draftRevision = { a: 0, b: 0 };
+
+function editDraft(seat, text) {
+  draft[seat] = text;
+  draftRevision[seat]++;
+}
+
+function clearSubmittedDraft(seat, submitted) {
+  if (draftRevision[seat] === submitted.revision && draft[seat] === submitted.text) editDraft(seat, "");
+}
 
 const EXAMPLES = {
   en: ["We need to table this proposal before the board meets.", "Let us meet next Friday.", "I saw her duck."],
@@ -44,7 +54,6 @@ function render() {
 function renderPane(s) {
   const pane = $("pane-" + s), seat = state.seats[s];
   const keep = pane.querySelector("textarea");
-  if (keep) draft[s] = keep.value;
   const hadFocus = keep && document.activeElement === keep;
   const prevScroll = pane.querySelector(".thread");
   const atBottom = !prevScroll || prevScroll.scrollHeight - prevScroll.scrollTop - prevScroll.clientHeight < 60;
@@ -63,7 +72,7 @@ function renderPane(s) {
     const e = el("div", "empty");
     e.append(el("p", null, `Write to ${state.seats[other(s)].name} in ${L(seat.lang)}. Try one:`));
     const chips = el("div", "chips");
-    for (const ex of EXAMPLES[seat.lang] || EXAMPLES.en) { const c = el("button", "chip", ex); c.onclick = () => { draft[s] = ex; render(); pane.querySelector("textarea").focus(); }; chips.append(c); }
+    for (const ex of EXAMPLES[seat.lang] || EXAMPLES.en) { const c = el("button", "chip", ex); c.onclick = () => { editDraft(s, ex); render(); pane.querySelector("textarea").focus(); }; chips.append(c); }
     e.append(chips); thread.append(e);
   }
   for (const m of state.messages) thread.append(messageView(m, s));
@@ -72,8 +81,16 @@ function renderPane(s) {
   const form = el("form", "composer");
   const ta = el("textarea"); ta.setAttribute("aria-label", `Message from ${seat.name}`); ta.placeholder = `Message in ${L(seat.lang)}`; ta.value = draft[s]; ta.disabled = busy; ta.maxLength = 600;
   const btn = el("button", null, "Check & send"); btn.disabled = busy;
+  ta.oninput = () => editDraft(s, ta.value);
   ta.onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); form.requestSubmit(); } };
-  form.onsubmit = (ev) => { ev.preventDefault(); const t = ta.value.trim(); if (t) submit(s, t); };
+  form.onsubmit = (ev) => {
+    ev.preventDefault();
+    const t = ta.value.trim();
+    if (t) {
+      if (draft[s] !== ta.value) editDraft(s, ta.value);
+      submit(s, t, { text: draft[s], revision: draftRevision[s] });
+    }
+  };
   form.append(ta, btn); pane.append(form);
   if (hadFocus) ta.focus();
   if (atBottom) thread.scrollTop = thread.scrollHeight; else if (prevScroll) thread.scrollTop = prevScroll.scrollTop;
@@ -94,17 +111,25 @@ function messageView(m, viewer) {
     if (m.status === "mismatch") {
       const o = optLabel(m, m.receiverRead);
       wrap.append(el("div", "meta bad", `${other_} read it as: ${o.label} (${o.paraphrase})`));
-      const b = el("button", "act", `Tell ${other_} what you meant`); b.onclick = () => act("/api/clarify", { id: m.id }); wrap.append(b);
+      const b = el("button", "act", `Tell ${other_} what you meant`); b.onclick = () => act("/api/clarify", { id: m.id, seat: viewer }); wrap.append(b);
     }
-    if (m.status === "resolved") wrap.append(el("div", "meta ok", `Clarified to ${other_}`));
+    if (m.status === "clarification_pending") {
+      const prior = optLabel(m, m.receiverRead);
+      wrap.append(el("div", "meta", `Clarification sent; waiting for ${other_} to answer again`));
+      wrap.append(el("div", "meta", `Their previous answer: ${prior.label} (${prior.paraphrase})`));
+    }
     if (m.ambiguityChecked) wrap.append(el("div", "meta", "Checked: the possible readings translate the same way"));
   } else {
     if (m.intended) wrap.append(el("div", "meta", `${sender} chose this meaning out of ${m.options.length} possible`));
     if (m.status === "mismatch") wrap.append(el("div", "meta bad", `${sender} was told you read it differently`));
-    if (m.status === "resolved") { wrap.append(el("div", "meta ok", `${sender} confirms they meant:`)); wrap.append(el("div", "meta", m.delivered)); }
+    if (m.status === "clarification_pending") {
+      wrap.append(el("div", "meta", `${sender} is clarifying that they meant:`));
+      wrap.append(el("div", "meta", m.delivered));
+      wrap.append(el("div", "meta", `Your previous answer: ${optLabel(m, m.receiverRead).text}`));
+    }
     if (m.status === "aligned") wrap.append(el("div", "meta ok", `Confirmed, same meaning as ${sender}'s`));
-    if (m.options && m.status === "awaiting") {
-      const f = el("fieldset", "read"); f.append(el("legend", null, "How did you read it?"));
+    if (m.options && ["awaiting", "clarification_pending"].includes(m.status)) {
+      const f = el("fieldset", "read"); f.append(el("legend", null, m.status === "clarification_pending" ? "After this clarification, how do you read it?" : "How did you read it?"));
       let pick = null; const go = el("button", null, "Confirm"); go.type = "button"; go.disabled = true;
       for (const o of m.options) {
         const lab = el("label"); const r = el("input"); r.type = "radio"; r.name = "r" + m.id; r.value = o.id;
@@ -115,19 +140,30 @@ function messageView(m, viewer) {
       f.append(go); wrap.append(f);
     }
   }
+  if (m.clarifications?.length) {
+    const history = el("details", "meta");
+    history.append(el("summary", null, `Clarification history (${m.clarifications.length})`));
+    for (const entry of m.clarifications) {
+      const prior = optLabel(m, entry.receiverRead);
+      const intended = optLabel(m, entry.intended);
+      history.append(el("p", null, `Previous answer: ${mine ? prior.paraphrase : prior.text}`));
+      history.append(el("p", null, `Clarification: ${mine ? intended.paraphrase : entry.text}`));
+    }
+    wrap.append(history);
+  }
   return wrap;
 }
 
 async function act(path, body) { try { await api(path, body); await poll(); } catch (e) { alert(e.message); } }
 
-async function submit(s, text) {
-  busy = true; draft[s] = text; render();
+async function submit(s, text, submitted) {
+  busy = true; render();
   showBusy(s, `Asking Nemotron for readings, then translating and back-translating each one`);
   try {
     const a = await api("/api/analyze", { seat: s, text });
-    if (a.flagged) { showSheet(s, a); busy = false; render(); return; }
+    if (a.flagged) { showSheet(s, a, submitted); busy = false; render(); return; }
     await api("/api/send", { seat: s, analysisId: a.analysisId });
-    draft[s] = ""; hideSheet(); busy = false; await poll(); render();
+    clearSubmittedDraft(s, submitted); hideSheet(); busy = false; await poll(); render();
   } catch (e) {
     busy = false; hideSheet(); render(); alert(e.message);
   }
@@ -139,7 +175,7 @@ function showBusy(s, msg) {
 }
 function hideSheet() { $("sheet").hidden = true; sheetFor = null; }
 
-function showSheet(s, a) {
+function showSheet(s, a, submitted) {
   sheetFor = a;
   const sh = $("sheet"); sh.hidden = false; sh.style.setProperty("--c", `var(--${s})`);
   sh.replaceChildren();
@@ -164,7 +200,7 @@ function showSheet(s, a) {
     row(`which comes back as (${L(a.from)})`, r.back, "back");
     if (r.consequence) row("they would then", r.consequence);
     c.append(dl);
-    const b = el("button", null, `Send reading ${r.id}`); b.onclick = () => choose(s, a, r.id); c.append(b);
+    const b = el("button", null, `Send reading ${r.id}`); b.onclick = () => choose(s, a, r.id, submitted); c.append(b);
     cols.append(c);
   }
   sh.append(cols);
@@ -180,8 +216,8 @@ function showSheet(s, a) {
   sh.querySelector("button").focus();
 }
 
-async function choose(s, a, pick) {
-  try { await api("/api/send", { seat: s, analysisId: a.analysisId, pick }); draft[s] = ""; hideSheet(); await poll(); render(); }
+async function choose(s, a, pick, submitted) {
+  try { await api("/api/send", { seat: s, analysisId: a.analysisId, pick }); clearSubmittedDraft(s, submitted); hideSheet(); await poll(); render(); }
   catch (e) { alert(e.message); }
 }
 
