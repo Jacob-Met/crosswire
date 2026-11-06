@@ -4,6 +4,8 @@ Two people who share a job but not a language chat side by side. Before a messag
 
 A fluent translator silently commits to one reading. CROSSWIRE makes that choice visible.
 
+When the recipient reports a different reading, the sender can clarify what they meant. That leaves the message awaiting a new recipient answer. The recipient can agree or report that they still read it differently; only their answer establishes alignment. Earlier readings remain visible in the message’s clarification history.
+
 ## Quick start
 
 Requires Node 22+. No npm dependencies.
@@ -11,7 +13,7 @@ Requires Node 22+. No npm dependencies.
 ```sh
 export NEBIUS_API_KEY=...        # Nebius Token Factory key
 node server.mjs                  # http://localhost:4417
-node --test                      # 10 tests, no network needed
+node --test                      # tests use authored fixtures; no network needed
 ```
 
 Open http://localhost:4417. Maya (English) and Diego (Spanish) share one room; pick a sample sentence and press "Check & send". Without a key the app starts and explains that checking is unavailable (HTTP 503); nothing is faked.
@@ -44,7 +46,7 @@ Why the 120B-A12B Super model: the analysis step needs reliable structured JSON 
 - Word-overlap divergence is crude: it can miss ambiguities whose back-translations share words, and can flag paraphrase noise. The threshold was tuned on a handful of sentences.
 - A model may miss an ambiguity entirely; CROSSWIRE reduces silent mistranslation, it does not guarantee correctness.
 - A check takes several seconds (about six model calls, partly parallel).
-- State is in memory, one shared room, no accounts or persistence. Messages are capped at 600 characters.
+- State is in memory, one shared room, no accounts or persistence. Messages are capped at 600 characters. Participant seats separate sender and recipient actions in this shared interface; they do not authenticate a person.
 - Tested with English and Spanish; other listed languages are untested.
 
 ## License

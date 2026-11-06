@@ -70,7 +70,7 @@ export function createApp({ llm = createLlm() } = {}) {
             intended: a.flagged ? { id: reading.id, paraphrase: reading.paraphrase, consequence: reading.consequence } : null,
             options: a.flagged ? a.readings.map((x) => ({ id: x.id, text: x.translation, label: x.label, paraphrase: x.paraphrase })) : null,
             focus: a.flagged ? a.focus : null, ambiguityChecked: a.ambiguous && !a.flagged ? true : false,
-            receiverRead: null, status: a.flagged ? "awaiting" : "plain",
+            receiverRead: null, status: a.flagged ? "awaiting" : "plain", clarifications: [],
           };
           r.messages.push(m); r.rev++;
           return send(200, { message: m });
@@ -78,17 +78,22 @@ export function createApp({ llm = createLlm() } = {}) {
         if (url.pathname === "/api/understood") {
           const m = r.messages.find((x) => x.id === b.id);
           if (!m || !m.options) return send(404, { error: "no such message" });
-          if (b.seat === m.seat) return send(400, { error: "Only the recipient answers this." });
+          if (!["a", "b"].includes(b.seat)) return send(400, { error: "A valid participant seat is required." });
+          if (b.seat !== other(m.seat)) return send(403, { error: "Only the recipient answers this." });
           if (!m.options.some((o) => o.id === b.reading)) return send(400, { error: "unknown reading" });
           m.receiverRead = b.reading;
           m.status = b.reading === m.intended.id ? "aligned" : "mismatch";
           r.rev++; return send(200, { message: m });
         }
         if (url.pathname === "/api/clarify") {
-          // After a mismatch, show the sender's intended reading to the recipient in their language.
+          // Sending a clarification does not speak for the recipient.
           const m = r.messages.find((x) => x.id === b.id);
-          if (!m || m.status !== "mismatch") return send(404, { error: "nothing to clarify" });
-          m.status = "resolved"; r.rev++; return send(200, { message: m });
+          if (!m || !m.options) return send(404, { error: "no such message" });
+          if (!["a", "b"].includes(b.seat)) return send(400, { error: "A valid participant seat is required." });
+          if (b.seat !== m.seat) return send(403, { error: "Only the sender clarifies this." });
+          if (m.status !== "mismatch") return send(409, { error: "Wait for the recipient to report a different reading before clarifying." });
+          m.clarifications.push({ receiverRead: m.receiverRead, intended: m.intended.id, text: m.delivered });
+          m.status = "clarification_pending"; r.rev++; return send(200, { message: m });
         }
         return send(404, { error: "not found" });
       } catch (e) {

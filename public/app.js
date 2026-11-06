@@ -94,17 +94,25 @@ function messageView(m, viewer) {
     if (m.status === "mismatch") {
       const o = optLabel(m, m.receiverRead);
       wrap.append(el("div", "meta bad", `${other_} read it as: ${o.label} (${o.paraphrase})`));
-      const b = el("button", "act", `Tell ${other_} what you meant`); b.onclick = () => act("/api/clarify", { id: m.id }); wrap.append(b);
+      const b = el("button", "act", `Tell ${other_} what you meant`); b.onclick = () => act("/api/clarify", { id: m.id, seat: viewer }); wrap.append(b);
     }
-    if (m.status === "resolved") wrap.append(el("div", "meta ok", `Clarified to ${other_}`));
+    if (m.status === "clarification_pending") {
+      const prior = optLabel(m, m.receiverRead);
+      wrap.append(el("div", "meta", `Clarification sent; waiting for ${other_} to answer again`));
+      wrap.append(el("div", "meta", `Their previous answer: ${prior.label} (${prior.paraphrase})`));
+    }
     if (m.ambiguityChecked) wrap.append(el("div", "meta", "Checked: the possible readings translate the same way"));
   } else {
     if (m.intended) wrap.append(el("div", "meta", `${sender} chose this meaning out of ${m.options.length} possible`));
     if (m.status === "mismatch") wrap.append(el("div", "meta bad", `${sender} was told you read it differently`));
-    if (m.status === "resolved") { wrap.append(el("div", "meta ok", `${sender} confirms they meant:`)); wrap.append(el("div", "meta", m.delivered)); }
+    if (m.status === "clarification_pending") {
+      wrap.append(el("div", "meta", `${sender} is clarifying that they meant:`));
+      wrap.append(el("div", "meta", m.delivered));
+      wrap.append(el("div", "meta", `Your previous answer: ${optLabel(m, m.receiverRead).text}`));
+    }
     if (m.status === "aligned") wrap.append(el("div", "meta ok", `Confirmed, same meaning as ${sender}'s`));
-    if (m.options && m.status === "awaiting") {
-      const f = el("fieldset", "read"); f.append(el("legend", null, "How did you read it?"));
+    if (m.options && ["awaiting", "clarification_pending"].includes(m.status)) {
+      const f = el("fieldset", "read"); f.append(el("legend", null, m.status === "clarification_pending" ? "After this clarification, how do you read it?" : "How did you read it?"));
       let pick = null; const go = el("button", null, "Confirm"); go.type = "button"; go.disabled = true;
       for (const o of m.options) {
         const lab = el("label"); const r = el("input"); r.type = "radio"; r.name = "r" + m.id; r.value = o.id;
@@ -114,6 +122,16 @@ function messageView(m, viewer) {
       go.onclick = () => act("/api/understood", { id: m.id, seat: viewer, reading: pick });
       f.append(go); wrap.append(f);
     }
+  }
+  if (m.clarifications?.length) {
+    const history = el("details", "meta");
+    history.append(el("summary", null, `Clarification history (${m.clarifications.length})`));
+    for (const entry of m.clarifications) {
+      const prior = optLabel(m, entry.receiverRead);
+      const intended = optLabel(m, entry.intended);
+      history.append(el("p", null, `Previous answer: ${mine ? prior.paraphrase : prior.text}. Clarification: ${mine ? intended.paraphrase : entry.text}`));
+    }
+    wrap.append(history);
   }
   return wrap;
 }
